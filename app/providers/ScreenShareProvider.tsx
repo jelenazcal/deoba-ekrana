@@ -26,6 +26,15 @@ interface ScreenShareContextProps {
   disconnectSession: () => Promise<void>;
 }
 
+// Google Free Public STUN Servers - compliant with free Google APIs rules
+const rtcConfig: RTCConfiguration = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+  ],
+};
+
 const ScreenShareContext = createContext<ScreenShareContextProps | undefined>(undefined);
 
 export function ScreenShareProvider({ children }: { children: React.ReactNode }) {
@@ -44,15 +53,8 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
   const pollingIntervalRef = useRef<any>(null);
   const activeSignalIdRef = useRef<string | null>(null);
   const processedSignalIdsRef = useRef<Set<string>>(new Set());
-
-  // Google Free Public STUN Servers - compliant with free Google APIs rules
-  const rtcConfig: RTCConfiguration = {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
-    ],
-  };
+  const partnerIdRef = useRef<string | null>(null);
+  const partnerDeskIdRef = useRef<string | null>(null);
 
   // Disconnect & cleanup session resources
   const disconnectSession = useCallback(async () => {
@@ -64,7 +66,7 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
     }
     
     // Notify peer on server
-    if (token && activeSignalIdRef.current) {
+    if (token && (activeSignalIdRef.current || partnerIdRef.current)) {
       fetch('/api/signaling', {
         method: 'POST',
         headers: {
@@ -73,7 +75,7 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
         },
         body: JSON.stringify({
           action: 'create',
-          toUserId: incomingRequest?.fromId || null,
+          toUserId: partnerIdRef.current || null,
           type: 'disconnect',
           status: 'completed'
         })
@@ -107,7 +109,9 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
     activeSignalIdRef.current = null;
     pendingCandidatesRef.current = [];
     processedSignalIdsRef.current.clear();
-  }, [localStream, token, incomingRequest]);
+    partnerIdRef.current = null;
+    partnerDeskIdRef.current = null;
+  }, [localStream, token]);
 
   // Create RTCPeerConnection helper
   const createPeerConnection = useCallback((sharing: boolean) => {
@@ -127,8 +131,8 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
           },
           body: JSON.stringify({
             action: 'create',
-            toUserId: activeSignalIdRef.current ? undefined : incomingRequest?.fromId,
-            toDeskId: partnerDeskId || undefined,
+            toUserId: partnerIdRef.current || undefined,
+            toDeskId: partnerDeskIdRef.current || undefined,
             type: 'ice_candidate',
             status: 'connected',
             payload: event.candidate.toJSON()
@@ -159,13 +163,15 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
 
     peerConnectionRef.current = pc;
     return pc;
-  }, [token, user, partnerDeskId, incomingRequest, disconnectSession]);
+  }, [token, user, disconnectSession]);
 
   // Action: Initiate a Remote Connection request by typing 9-digit ID
   const startConnection = async (targetDeskId: string) => {
     if (!token || !user) return;
     setConnectionState('calling');
     setPartnerDeskId(targetDeskId);
+    partnerDeskIdRef.current = targetDeskId;
+    pendingCandidatesRef.current = [];
 
     try {
       const res = await fetch('/api/signaling', {
@@ -187,6 +193,7 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
       }
       
       activeSignalIdRef.current = data.signal.id;
+      partnerIdRef.current = data.signal.toId;
       // Host details
       setPartnerName('Udaljeni računar...');
     } catch (err: any) {
@@ -204,6 +211,10 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
       setIsSharingOwnScreen(true);
       setPartnerName(incomingRequest.fromName);
       setPartnerDeskId(incomingRequest.fromDeskId);
+      
+      partnerIdRef.current = incomingRequest.fromId;
+      partnerDeskIdRef.current = incomingRequest.fromDeskId;
+      pendingCandidatesRef.current = [];
 
       // 1. Capture screen display from user browser
       const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -333,9 +344,12 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
         if (sig.fromId === user.id && sig.type === 'request_screen' && sig.status === 'accepted' && connectionState === 'calling') {
           processedSignalIdsRef.current.add(sig.id);
           
-          setPartnerName(sig.fromName);
-          setPartnerDeskId(sig.fromDeskId);
+          setPartnerName(sig.toName || 'Udaljeni računar');
+          setPartnerDeskId(sig.toDeskId);
           setIsSharingOwnScreen(false);
+          
+          partnerIdRef.current = sig.toId;
+          partnerDeskIdRef.current = sig.toDeskId;
 
           // Build PeerConnection, set remote offer description and create answer
           const pc = createPeerConnection(false);
@@ -371,7 +385,7 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
         }
 
         // Scenario 4: Host receives SDP Answer (I am the Host / Sharer, receiving Answer)
-        if (sig.toId === user.id && sig.type === 'answer' && connectionState === 'connected') {
+        if (sig.toId === user.id && sig.type === 'answer' && peerConnectionRef.current && !peerConnectionRef.current.remoteDescription) {
           processedSignalIdsRef.current.add(sig.id);
           const pc = peerConnectionRef.current;
           if (pc && sig.payload) {
@@ -388,8 +402,8 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
 
         // Scenario 5: Receive remote ICE Candidate of partner
         if (sig.type === 'ice_candidate' && sig.payload) {
-          // Verify that this is from other person
-          if (sig.fromId !== user.id) {
+          // Verify that this is from other person AND targeted to us
+          if (sig.toId === user.id && sig.fromId === partnerIdRef.current) {
             processedSignalIdsRef.current.add(sig.id);
             const cand = sig.payload;
             const pc = peerConnectionRef.current;
@@ -408,7 +422,7 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
     } catch (error) {
       console.error('Error polling signaling server:', error);
     }
-  }, [token, user, connectionState, createPeerConnection, disconnectSession, incomingRequest]);
+  }, [token, user, connectionState, createPeerConnection, disconnectSession]);
 
   // Signaling polling worker
   useEffect(() => {

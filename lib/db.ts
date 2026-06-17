@@ -23,6 +23,7 @@ export interface SignalRequest {
   fromDeskId: string;
   toId: string;
   toDeskId: string;
+  toName?: string;
   type: 'request_screen' | 'offer' | 'answer' | 'ice_candidate' | 'disconnect';
   status: 'pending' | 'accepted' | 'rejected' | 'connected' | 'completed';
   payload?: any;

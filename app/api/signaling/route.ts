@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
         fromDeskId: currentUser.connectionId,
         toId: targetUser.id,
         toDeskId: targetUser.connectionId,
+        toName: targetUser.fullName,
         type: type || 'request_screen',
         status: status || 'pending',
         payload: payload || null,
