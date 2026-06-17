@@ -5,6 +5,7 @@ import { useAuthState, useAuthDispatch } from '@/app/providers/AuthProvider';
 import { useScreenShare } from '@/app/providers/ScreenShareProvider';
 import { Icons } from '@/app/components/Icons';
 import { motion, AnimatePresence } from 'motion/react';
+import Link from 'next/link';
 
 // Format desk ID as "XXX XXX XXX" during input
 function formatDeskId(value: string): string {
@@ -50,6 +51,7 @@ export default function Home() {
   const [chatInput, setChatInput] = useState<string>('');
   const [notepadText, setNotepadText] = useState<string>('');
   const [showCollabDrawer, setShowCollabDrawer] = useState<boolean>(true);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -192,7 +194,7 @@ export default function Home() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-white">
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-white">
       
       {/* GLOBAL TOAST ALERTERS */}
       <AnimatePresence>
@@ -355,8 +357,172 @@ export default function Home() {
         )}
       </AnimatePresence>
 
+      {/* MOBILE HEADER FOR HANDHELD SCREENS */}
+      <div className="md:hidden bg-gray-950 border-b border-white/5 px-4 py-3.5 flex items-center justify-between shrink-0 z-50 shadow-md">
+        <div className="flex items-center gap-3">
+          <div className="p-1.5 bg-green-600 rounded-lg text-white">
+            <Icons.Shield className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-white text-xs tracking-tight block">Dežurna Mreža</span>
+            <span className="text-[7.5px] text-[#5ce08c] font-black tracking-widest uppercase block">prenos i brzi pristup</span>
+          </div>
+        </div>
+        <button 
+          onClick={() => setMobileSidebarOpen(true)}
+          className="p-2 hover:bg-white/10 text-white rounded-lg transition"
+          title="Otvori navigaciju"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
+
+      {/* MOBILE SIDEBAR MODAL/DRAWER (SLIDE OVER) */}
+      <AnimatePresence>
+        {mobileSidebarOpen && (
+          <div className="fixed inset-0 z-[250] md:hidden">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMobileSidebarOpen(false)}
+              className="absolute inset-0 bg-gray-950/80 backdrop-blur-sm"
+            />
+            
+            {/* Sliding Drawer */}
+            <motion.div 
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="absolute top-0 bottom-0 left-0 w-72 bg-gray-950 text-white flex flex-col justify-between border-r border-white/5 h-full z-10 shadow-2xl"
+            >
+              <div className="p-6 flex flex-col space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-green-600 rounded-xl text-white">
+                      <Icons.Shield className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="font-black text-sm tracking-tight block">Dežurna Mreža</span>
+                      <span className="text-[8px] text-[#5ce08c] font-black tracking-widest uppercase block mt-0.5">saradnja i prenos</span>
+                    </div>
+                  </div>
+                  
+                  <button 
+                    onClick={() => setMobileSidebarOpen(false)}
+                    className="p-1.5 hover:bg-white/15 rounded text-gray-400 animate-in spin-in duration-300"
+                    title="Zatvori navigaciju"
+                  >
+                    <Icons.X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="py-2.5 px-4 bg-white/5 border border-white/5 rounded-xl text-center">
+                  <div className="flex items-center gap-2 justify-center text-[9px] text-green-400 font-mono tracking-widest font-black uppercase">
+                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                    <span>Slobodno korišćenje</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Section inside mobile drawer */}
+              <div className="p-6 bg-white/5 m-5 rounded-[2rem] border border-white/5 text-xs text-left">
+                <p className="text-[10px] font-black uppercase text-gray-500 tracking-wider mb-2">Moja dežurna lokacija:</p>
+                
+                <div className="space-y-4">
+                  {isEditingName ? (
+                    <form onSubmit={handleUpdateNameSubmit} className="space-y-2">
+                      <input 
+                        type="text"
+                        value={displayNameInput}
+                        onChange={(e) => setDisplayNameInput(e.target.value)}
+                        className="w-full bg-gray-950 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-green-500 font-bold"
+                        maxLength={25}
+                        placeholder="Ime / Naziv..."
+                        autoFocus
+                      />
+                      <div className="flex gap-1">
+                        <button 
+                          type="submit" 
+                          className="flex-1 bg-green-600 text-white text-[10px] py-1 font-black rounded hover:bg-green-500"
+                        >
+                          Sačuvaj
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            setDisplayNameInput(user.fullName);
+                            setIsEditingName(false);
+                          }} 
+                          className="px-2 bg-white/10 text-white text-[10px] rounded"
+                        >
+                          Otkaži
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="overflow-hidden">
+                        <p className="font-extrabold text-white text-sm truncate">{user.fullName}</p>
+                        <p className="text-[8px] text-[#5ce08c] font-black tracking-widest uppercase">{user.title}</p>
+                      </div>
+                      <button 
+                        onClick={() => setIsEditingName(true)}
+                        className="p-1.5 hover:bg-white/15 rounded text-gray-400"
+                        title="Promeni naziv računara"
+                      >
+                        <Icons.Settings className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="border-t border-white/5 pt-3.5 space-y-2">
+                    <button 
+                      onClick={() => {
+                        setShowMobileSync(true);
+                        setMobileSidebarOpen(false);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-green-950/40 hover:bg-green-600 rounded-xl text-[9px] font-black tracking-widest transition border border-green-900/20 text-green-400 hover:text-white uppercase"
+                    >
+                      <Icons.Monitor className="w-3 h-3" />
+                      <span>Poveži telefon</span>
+                    </button>
+
+                    <button 
+                      onClick={() => {
+                        logout();
+                        setMobileSidebarOpen(false);
+                      }} 
+                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-red-950/10 hover:bg-red-950/60 rounded-xl text-[9px] font-black tracking-widest transition border border-red-900/10 text-red-400 hover:text-white uppercase"
+                      title="Generiši nov ID ustanove"
+                    >
+                      <Icons.Logout className="w-3 h-3" />
+                      <span>Novi ID (Odjava)</span>
+                    </button>
+
+                    <Link 
+                      href="/tests" 
+                      onClick={() => setMobileSidebarOpen(false)}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-950/20 hover:bg-blue-600 rounded-xl text-[9px] font-black tracking-widest transition border border-blue-900/20 text-blue-400 hover:text-white uppercase"
+                      title="Pokreni simulaciju i testove toka poziva"
+                    >
+                      <Icons.Settings className="w-3 h-3 text-blue-400" />
+                      <span>Mrežna Dijagnostika</span>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* SIDEBAR NAVIGATION AREA (SIMPLIFIED & HIGH CONTRAST) */}
-      <aside className="w-64 bg-gray-950 text-white flex flex-col shrink-0 border-r border-white/5 h-full justify-between">
+      <aside className="hidden md:flex w-64 bg-gray-950 text-white flex-col shrink-0 border-r border-white/5 h-full justify-between">
         <div className="p-8 flex flex-col space-y-8">
           {/* Logo badge area */}
           <div className="flex items-center gap-4">
@@ -445,6 +611,15 @@ export default function Home() {
                 <Icons.Logout className="w-3 h-3" />
                 <span>Novi ID (Odjava)</span>
               </button>
+
+              <Link 
+                href="/tests" 
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-950/20 hover:bg-blue-600 rounded-xl text-[9px] font-black tracking-widest transition border border-blue-900/20 text-blue-400 hover:text-white uppercase"
+                title="Pokreni simulaciju i testove toka poziva"
+              >
+                <Icons.Settings className="w-3 h-3 text-blue-400" />
+                <span>Mrežna Dijagnostika</span>
+              </Link>
             </div>
           </div>
         </div>
@@ -454,26 +629,26 @@ export default function Home() {
       <main className="flex-1 flex flex-col bg-[#FBFBFF] overflow-hidden justify-between h-full relative">
         
         {/* HEADER TOOLBAR BAR */}
-        <header className="bg-white px-10 py-6 border-b border-gray-100 flex items-center justify-between shrink-0">
+        <header className="bg-white px-4 md:px-10 py-5 md:py-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between shrink-0 gap-3 sm:gap-0">
           <div>
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-none">
+            <h1 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight leading-tight">
               Udaljeni prenos i saradnja u hodniku
             </h1>
-            <p className="text-xs text-gray-400 mt-1.5 font-medium leading-none">
+            <p className="text-[10px] md:text-xs text-gray-400 mt-1 md:mt-1.5 font-medium leading-none">
               Sistem za prenos ekrana bez instalacije i bez ikakvih lozinki za 50 internih kolega.
             </p>
           </div>
 
           <button 
             onClick={() => setShowMapModal(true)}
-            className="px-5 py-3 border border-gray-200 hover:bg-gray-50 rounded-xl text-[10px] font-black tracking-wider uppercase transition shadow-sm"
+            className="w-full sm:w-auto px-5 py-3 border border-gray-200 hover:bg-gray-50 rounded-xl text-[10px] font-black tracking-wider uppercase transition shadow-sm"
           >
             Pregled ordinacija
           </button>
         </header>
 
         {/* WORKSPACE AREA CONTAINER */}
-        <div className="flex-1 overflow-y-auto p-10">
+        <div className="flex-1 overflow-y-auto p-4 md:p-10">
           
           {/* SIDER VIEW AND SCREEN PLAYER PANELS */}
           <div className="w-full space-y-8">
@@ -521,9 +696,9 @@ export default function Home() {
                 </div>
 
                 {/* Video container and text notes split panel */}
-                <div className="flex-1 flex overflow-hidden relative">
+                <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
                   
-                  <div className="flex-1 bg-black flex items-center justify-center relative overflow-hidden">
+                  <div className="flex-1 min-h-[300px] bg-black flex items-center justify-center relative overflow-hidden">
                     {isSharingOwnScreen ? (
                       <div className="text-center p-12 text-white max-w-sm">
                         <div className="w-16 h-16 bg-[#5ce08c]/10 text-[#5ce08c] rounded-2xl flex items-center justify-center mx-auto mb-5 border border-[#5ce08c]/20">
@@ -558,7 +733,7 @@ export default function Home() {
 
                   {/* Sidle Collab drawer panel for notes and chat */}
                   {showCollabDrawer && (
-                    <div className="w-80 border-l border-white/5 bg-gray-900 flex flex-col h-full shrink-0">
+                    <div className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-white/5 bg-gray-900 flex flex-col h-72 lg:h-full shrink-0">
                       
                       {/* Notepad */}
                       <div className="p-4 border-b border-white/5 flex flex-col h-1/2">
@@ -814,14 +989,24 @@ export default function Home() {
         </div>
 
         {/* FOOTER CALL TO ACTIONS */}
-        <footer className="bg-white border-t border-gray-100 px-10 py-5 flex flex-col md:flex-row items-center justify-between shrink-0 text-center md:text-left gap-3">
-          <button 
-            onClick={() => setShowMobileSync(true)}
-            className="text-[9px] font-black text-green-600 hover:text-green-800 uppercase tracking-widest flex items-center gap-1.5"
-          >
-            <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-            <span>Poveži dežurni telefon preko QR CODA</span>
-          </button>
+        <footer className="bg-white border-t border-gray-100 px-4 md:px-10 py-4 md:py-5 flex flex-col md:flex-row items-center justify-between shrink-0 text-center md:text-left gap-3">
+          <div className="flex flex-wrap items-center gap-5 justify-center md:justify-start">
+            <button 
+              onClick={() => setShowMobileSync(true)}
+              className="text-[9px] font-black text-green-600 hover:text-green-800 uppercase tracking-widest flex items-center gap-1.5"
+            >
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+              <span>Poveži dežurni telefon preko QR CODA</span>
+            </button>
+
+            <Link 
+              href="/tests"
+              className="text-[9px] font-black text-blue-600 hover:text-blue-800 uppercase tracking-widest flex items-center gap-1.5"
+            >
+              <span className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+              <span>Pokreni Test Toka Poziva / Dijagnostiku</span>
+            </Link>
+          </div>
           
           <div className="flex items-center gap-4 text-[9px] font-black uppercase text-gray-300 tracking-widest">
             <span>SISTEM ZA PRENOS v3.5.0-GUEST</span>

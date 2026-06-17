@@ -67,40 +67,59 @@ export function verifyToken(token: string): { userId: string; role: 'admin' | 'u
   }
 }
 
-// Clean inactive peers (no poll in 8 seconds) and expired signals (older than 2 minutes)
+// Clean inactive peers (no poll in 10 minutes to support background tabs and cellular latency) and expired signals (older than 3 minutes)
 function purgeStaleData() {
   const now = Date.now();
   
   // Clean peers
   for (const [id, peer] of activePeers.entries()) {
     const lastActiveTime = new Date(peer.lastActive).getTime();
-    if (now - lastActiveTime > 8000) {
+    if (now - lastActiveTime > 600000) { // 10 minutes
       activePeers.delete(id);
     }
   }
 
   // Clean signals
-  const expiredSignalCutoff = now - 2 * 60 * 1000;
+  const expiredSignalCutoff = now - 3 * 60 * 1000;
   activeSignals = activeSignals.filter(s => s.createdAt > expiredSignalCutoff);
 }
 
 export const DbService = {
   getUsers: (): User[] => {
     purgeStaleData();
-    return Array.from(activePeers.values());
+    const now = Date.now();
+    return Array.from(activePeers.values()).map(peer => {
+      const lastActiveTime = new Date(peer.lastActive).getTime();
+      return {
+        ...peer,
+        isOnline: now - lastActiveTime < 15000 // Show online if active within last 15s
+      };
+    });
   },
 
   getUserById: (id: string): User | null => {
     purgeStaleData();
-    return activePeers.get(id) || null;
+    const peer = activePeers.get(id);
+    if (!peer) return null;
+    const now = Date.now();
+    const lastActiveTime = new Date(peer.lastActive).getTime();
+    return {
+      ...peer,
+      isOnline: now - lastActiveTime < 15000
+    };
   },
 
   getUserByEmail: (email: string): User | null => {
     purgeStaleData();
     const normalized = email.trim().toLowerCase();
+    const now = Date.now();
     for (const peer of activePeers.values()) {
       if (peer.email.toLowerCase() === normalized) {
-        return peer;
+        const lastActiveTime = new Date(peer.lastActive).getTime();
+        return {
+          ...peer,
+          isOnline: now - lastActiveTime < 15000
+        };
       }
     }
     return null;
@@ -109,9 +128,14 @@ export const DbService = {
   getUserByDeskId: (deskId: string): User | null => {
     purgeStaleData();
     const normalized = deskId.trim();
+    const now = Date.now();
     for (const peer of activePeers.values()) {
       if (peer.connectionId === normalized) {
-        return peer;
+        const lastActiveTime = new Date(peer.lastActive).getTime();
+        return {
+          ...peer,
+          isOnline: now - lastActiveTime < 15000
+        };
       }
     }
     return null;
