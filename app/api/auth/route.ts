@@ -16,14 +16,13 @@ export async function POST(req: NextRequest) {
 
     // Create or update this peer registry entry in memory
     const user = DbService.registerAnonymousUser(cleanId, cleanName);
-    const token = signToken({ userId: user.id, role: user.role, email: user.email });
+    const token = signToken({ userId: user.id, role: user.role });
 
     return NextResponse.json({
       message: 'Prijava uspešna!',
       token,
       user: {
         id: user.id,
-        email: user.email,
         fullName: user.fullName,
         title: user.title,
         role: user.role,
@@ -66,7 +65,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       user: {
         id: user.id,
-        email: user.email,
         fullName: user.fullName,
         title: user.title,
         role: user.role,

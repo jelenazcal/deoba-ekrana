@@ -26,7 +26,6 @@ export async function GET(req: NextRequest) {
     // Fetch active peers
     const users = DbService.getUsers().map(u => ({
       id: u.id,
-      email: u.email,
       fullName: u.fullName,
       title: u.title,
       role: u.role,

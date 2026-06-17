@@ -4,7 +4,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 
 export interface UserSummary {
   id: string;
-  email: string;
   fullName: string;
   title: string;
   role: 'admin' | 'user';
@@ -18,7 +17,6 @@ export interface UserSummary {
 
 export interface CurrentUser {
   id: string;
-  email: string;
   fullName: string;
   title: string;
   role: 'admin' | 'user';
@@ -39,8 +37,8 @@ interface AuthState {
 }
 
 interface AuthContextProps extends AuthState {
-  login: (email: string, password: string) => Promise<any>;
-  signup: (payload: { email: string; fullName: string; title: string; passwordPlain: string }) => Promise<any>;
+  login: (deskId: string, passwordPlain: string) => Promise<any>;
+  signup: (payload: { fullName: string; title: string; passwordPlain: string }) => Promise<any>;
   logout: () => void;
   updateProfileName: (newName: string) => Promise<void>;
   updateUserPermission: (userId: string, fields: any) => Promise<void>;
@@ -174,7 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Dummy login / signup wrappers to retain standard typescript dependencies cleanly
-  const login = async (email: string, password: string) => {
+  const login = async (deskId: string, passwordPlain: string) => {
     return Promise.resolve();
   };
 

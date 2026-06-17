@@ -2,7 +2,6 @@ import { createHmac, randomBytes } from 'crypto';
 
 export interface User {
   id: string;
-  email: string;
   fullName: string;
   title: string;
   role: 'admin' | 'user';
@@ -36,7 +35,7 @@ let activeSignals: SignalRequest[] = [];
 
 const JWT_SECRET = process.env.GEMINI_API_KEY || 'local_fallback_secret_key_2026_secure';
 
-export function signToken(payload: { userId: string; role: 'admin' | 'user'; email: string }): string {
+export function signToken(payload: { userId: string; role: 'admin' | 'user' }): string {
   const header = { alg: 'HS256', typ: 'JWT' };
   const encodedHeader = Buffer.from(JSON.stringify(header)).toString('base64url');
   
@@ -48,7 +47,7 @@ export function signToken(payload: { userId: string; role: 'admin' | 'user'; ema
   return `${signatureInput}.${signature}`;
 }
 
-export function verifyToken(token: string): { userId: string; role: 'admin' | 'user'; email: string } | null {
+export function verifyToken(token: string): { userId: string; role: 'admin' | 'user' } | null {
   try {
     const [header, payload, signature] = token.split('.');
     if (!header || !payload || !signature) return null;
@@ -109,22 +108,6 @@ export const DbService = {
     };
   },
 
-  getUserByEmail: (email: string): User | null => {
-    purgeStaleData();
-    const normalized = email.trim().toLowerCase();
-    const now = Date.now();
-    for (const peer of activePeers.values()) {
-      if (peer.email.toLowerCase() === normalized) {
-        const lastActiveTime = new Date(peer.lastActive).getTime();
-        return {
-          ...peer,
-          isOnline: now - lastActiveTime < 15000
-        };
-      }
-    }
-    return null;
-  },
-
   getUserByDeskId: (deskId: string): User | null => {
     purgeStaleData();
     const normalized = deskId.replace(/\s+/g, '').toLowerCase();
@@ -149,7 +132,6 @@ export const DbService = {
 
     const user: User = {
       id: cleanId,
-      email: `${cleanId.replace(/\s+/g, '')}@zcale.internal`,
       fullName: cleanName,
       title: 'Zaposleni',
       role: 'user',
@@ -168,7 +150,7 @@ export const DbService = {
     return user;
   },
 
-  updateUser: (id: string, updates: Partial<Omit<User, 'id' | 'email'>>): User | null => {
+  updateUser: (id: string, updates: Partial<Omit<User, 'id'>>): User | null => {
     purgeStaleData();
     const peer = activePeers.get(id);
     if (!peer) return null;
