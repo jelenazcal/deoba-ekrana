@@ -127,10 +127,10 @@ export const DbService = {
 
   getUserByDeskId: (deskId: string): User | null => {
     purgeStaleData();
-    const normalized = deskId.trim();
+    const normalized = deskId.replace(/\s+/g, '').toLowerCase();
     const now = Date.now();
     for (const peer of activePeers.values()) {
-      if (peer.connectionId === normalized) {
+      if (peer.connectionId.replace(/\s+/g, '').toLowerCase() === normalized) {
         const lastActiveTime = new Date(peer.lastActive).getTime();
         return {
           ...peer,

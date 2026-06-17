@@ -15,8 +15,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Nevažeći token.' }, { status: 401 });
     }
 
-    // Refresh my active state
-    DbService.updateUser(decoded.userId, { isOnline: true });
+    // Refresh my active state with auto session recovery if cleared
+    let currentUser = DbService.getUserById(decoded.userId);
+    if (!currentUser) {
+      currentUser = DbService.registerAnonymousUser(decoded.userId, `Korisnik ${decoded.userId.slice(-3)}`);
+    } else {
+      DbService.updateUser(currentUser.id, { isOnline: true });
+    }
 
     // Fetch active peers
     const users = DbService.getUsers().map(u => ({

@@ -14,13 +14,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Nevažeći token.' }, { status: 401 });
     }
 
-    const currentUser = DbService.getUserById(decoded.userId);
+    let currentUser = DbService.getUserById(decoded.userId);
     if (!currentUser) {
-      return NextResponse.json({ error: 'Korisnik ne postoji.' }, { status: 404 });
+      currentUser = DbService.registerAnonymousUser(decoded.userId, `Korisnik ${decoded.userId.slice(-3)}`);
+    } else {
+      // Keep user's online state updated during polling
+      DbService.updateUser(currentUser.id, { isOnline: true });
     }
-
-    // Keep user's online state updated during polling
-    DbService.updateUser(currentUser.id, { isOnline: true });
 
     const signals = DbService.getSignals(currentUser.id);
 
@@ -43,9 +43,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nevažeći token.' }, { status: 401 });
     }
 
-    const currentUser = DbService.getUserById(decoded.userId);
+    let currentUser = DbService.getUserById(decoded.userId);
     if (!currentUser) {
-      return NextResponse.json({ error: 'Korisnik ne postoji.' }, { status: 404 });
+      currentUser = DbService.registerAnonymousUser(decoded.userId, `Korisnik ${decoded.userId.slice(-3)}`);
+    } else {
+      DbService.updateUser(currentUser.id, { isOnline: true });
     }
 
     const body = await req.json();

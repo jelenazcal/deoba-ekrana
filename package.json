@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "build": "NEXT_DIST_DIR=.next_prod next build",
+    "start": "NEXT_DIST_DIR=.next_prod next start",
     "lint": "eslint .",
     "clean": "next clean"
   },
