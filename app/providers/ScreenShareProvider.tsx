@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useAuthState } from './AuthProvider';
 
-export type ConnectionState = 'idle' | 'calling' | 'receiving' | 'connected' | 'rejected' | 'disconnected';
+export type ConnectionState = 'idle' | 'calling' | 'receiving' | 'connecting' | 'connected' | 'rejected' | 'disconnected';
 
 interface IncomingRequest {
   id: string;
@@ -55,6 +55,7 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
   const processedSignalIdsRef = useRef<Set<string>>(new Set());
   const partnerIdRef = useRef<string | null>(null);
   const partnerDeskIdRef = useRef<string | null>(null);
+  const isPollingRef = useRef<boolean>(false);
 
   // Disconnect & cleanup session resources
   const disconnectSession = useCallback(async () => {
@@ -150,12 +151,33 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
       }
     };
 
+    pc.oniceconnectionstatechange = () => {
+      console.log('ICE Connection State changed:', pc.iceConnectionState);
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        setConnectionState('connected');
+      } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'closed') {
+        disconnectSession();
+      }
+    };
+
     // Receive streaming tracks
     if (!sharing) {
+      try {
+        pc.addTransceiver('video', { direction: 'recvonly' });
+      } catch (e) {
+        console.warn('addTransceiver not supported or failed:', e);
+      }
+
       pc.ontrack = (event) => {
         console.log('Incoming remote screen share stream track detected:', event.streams);
         if (event.streams && event.streams[0]) {
           setRemoteStream(event.streams[0]);
+          setConnectionState('connected');
+        } else {
+          // Robust fallback stream creation
+          const fallbackStream = new MediaStream();
+          fallbackStream.addTrack(event.track);
+          setRemoteStream(fallbackStream);
           setConnectionState('connected');
         }
       };
@@ -299,8 +321,10 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
   // WebRTC Signal handler (polls periodically for active handshakes)
   const pollSignalingChannel = useCallback(async () => {
     if (!token || !user) return;
+    if (isPollingRef.current) return;
 
     try {
+      isPollingRef.current = true;
       const res = await fetch('/api/signaling', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -343,7 +367,8 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
         // Scenario 3: Partner approved my viewing request (I am the Viewer / Client, receiving Offer)
         if (sig.fromId === user.id && sig.type === 'request_screen' && sig.status === 'accepted' && connectionState === 'calling') {
           processedSignalIdsRef.current.add(sig.id);
-          
+          setConnectionState('connecting'); // Change state immediately to prevent race conditions on next poll cycles
+
           setPartnerName(sig.toName || 'Udaljeni računar');
           setPartnerDeskId(sig.toDeskId);
           setIsSharingOwnScreen(false);
@@ -355,8 +380,7 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
           const pc = createPeerConnection(false);
           if (!pc) return;
 
-          const offerDesc = new RTCSessionDescription(sig.payload);
-          await pc.setRemoteDescription(offerDesc);
+          await pc.setRemoteDescription(sig.payload);
 
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
@@ -377,10 +401,12 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
             })
           });
 
+          setConnectionState('connected');
+
           // Mount any buffered ICE Candidates received earlier
           while (pendingCandidatesRef.current.length > 0) {
             const cand = pendingCandidatesRef.current.shift();
-            if (cand) pc.addIceCandidate(new RTCIceCandidate(cand)).catch(console.error);
+            if (cand) pc.addIceCandidate(cand).catch(console.error);
           }
         }
 
@@ -390,12 +416,12 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
           const pc = peerConnectionRef.current;
           if (pc && sig.payload) {
             console.log('Host setting remote Answer Description...');
-            await pc.setRemoteDescription(new RTCSessionDescription(sig.payload));
+            await pc.setRemoteDescription(sig.payload);
             
             // Mount any buffered ice
             while (pendingCandidatesRef.current.length > 0) {
               const cand = pendingCandidatesRef.current.shift();
-              if (cand) pc.addIceCandidate(new RTCIceCandidate(cand)).catch(console.error);
+              if (cand) pc.addIceCandidate(cand).catch(console.error);
             }
           }
         }
@@ -409,7 +435,7 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
             const pc = peerConnectionRef.current;
             if (pc && pc.remoteDescription) {
               console.log('Adding ICE candidate directly to peer connection');
-              await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(err => {
+              await pc.addIceCandidate(cand).catch(err => {
                 console.error('Error adding received candidate', err);
               });
             } else {
@@ -421,6 +447,8 @@ export function ScreenShareProvider({ children }: { children: React.ReactNode })
       }
     } catch (error) {
       console.error('Error polling signaling server:', error);
+    } finally {
+      isPollingRef.current = false;
     }
   }, [token, user, connectionState, createPeerConnection, disconnectSession]);
 

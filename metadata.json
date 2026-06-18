@@ -3,7 +3,8 @@
   "description": "Sistem za direktan prenos ekrana i brzu saradnju u realnom vremenu bez instalacije i bez registracije.",
   "requestFramePermissions": [
     "camera",
-    "microphone"
+    "microphone",
+    "display-capture"
   ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

@@ -722,6 +722,7 @@ export default function Home() {
                           className="w-full h-full object-contain"
                           playsInline
                           autoPlay
+                          muted
                         />
                         <div className="absolute bottom-6 left-6 bg-gray-900/90 border border-white/10 px-4 py-2.5 rounded-xl flex items-center gap-2">
                           <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
